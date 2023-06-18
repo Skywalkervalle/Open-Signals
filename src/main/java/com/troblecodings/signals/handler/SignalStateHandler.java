@@ -66,13 +66,16 @@ public final class SignalStateHandler implements INetworkSync {
 
     public static void createStates(final SignalStateInfo info,
             final Map<SEProperty, String> states) {
+        if (info.world.isClientSide)
+            return;
         new Thread(() -> {
-            if (info.world.isClientSide)
-                return;
             synchronized (CURRENTLY_LOADED_STATES) {
                 CURRENTLY_LOADED_STATES.put(info, ImmutableMap.copyOf(states));
             }
-            loadSignal(info, null);
+            synchronized (SIGNAL_COUNTER) {
+                SIGNAL_COUNTER.put(info, 1);
+            }
+            sendToAll(info, states);
             createToFile(info, states);
 
         }, "OSSignalStateHandler:createStates").start();
@@ -386,14 +389,9 @@ public final class SignalStateHandler implements INetworkSync {
                     }
                     SIGNAL_COUNTER.put(info, 1);
                 }
-                final Map<SEProperty, String> properties;
+                final Map<SEProperty, String> properties = readAndSerialize(info);
                 synchronized (CURRENTLY_LOADED_STATES) {
-                    if (CURRENTLY_LOADED_STATES.containsKey(info)) {
-                        properties = CURRENTLY_LOADED_STATES.get(info);
-                    } else {
-                        properties = readAndSerialize(info);
-                        CURRENTLY_LOADED_STATES.put(info, properties);
-                    }
+                    CURRENTLY_LOADED_STATES.put(info, properties);
                 }
                 if (player == null) {
                     sendToAll(info, properties);
